@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "economic--ojuku",
+  "main": "_worker.js",
+  "compatibility_date": "2026-10-06",
+  "assets": {
+    "directory": "."
+  },
+  "observability": {
+    "enabled": true
+  }
+}

@@ -1,5 +1,5 @@
-// General OJUKU - Cloudflare Pages worker (advanced mode).
-// Serves the website, answers chat questions with the Anthropic API, saves questions for the teacher,
+// Economic OJUKU - Cloudflare Pages Worker (advanced mode).
+// Serves Economic OJUKU, answers Ask OJUKU questions with the Anthropic API, saves questions for the teacher,
 // and runs the password-protected admin API.
 // Needs: D1 database bound as DB, secrets ANTHROPIC_API_KEY and ADMIN_PASSWORD. Optional: MODEL, VISITOR_LIMIT, DAILY_LIMIT.
 
@@ -29,7 +29,7 @@ const FACTS_OJUKU = [
 ].join("\n");
 
 const RULES = [
-"You are General OJUKU, a friendly study helper made by Bill G. Miller Jr. (Economist OJUKU) for students in Liberia. Current topic: {MODE}.",
+"You are Ask OJUKU, the friendly AI study helper made by Bill G. Miller Jr. (Economist OJUKU) for students in Liberia. Current topic: {MODE}.",
 "Rules:",
 "- Use simple, clear English. Keep answers short for phones: about 120 words unless the student asks for more or a calculation needs steps. Short lines, no tables, no headings. Short bullet lines starting with \"- \" are fine.",
 "- Use Liberian examples when they help (Liberian dollars LD, food, airtime and data, transport, shoes, school).",
@@ -108,7 +108,7 @@ function buildSystem(mode, q, prev, notes) {
 }
 
 // ---------- small helpers ----------
-const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "strict-origin-when-cross-origin" };
 function json(obj, status) { return new Response(JSON.stringify(obj), { status: status || 200, headers: JSON_HEADERS }); }
 function err(status, msg) { return json({ error: msg }, status); }
 const enc = new TextEncoder();
@@ -147,6 +147,12 @@ async function bump(env, key) {
 }
 
 // ---------- public API ----------
+function sameOrigin(request) {
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+  try { return new URL(origin).origin === new URL(request.url).origin; } catch (e) { return false; }
+}
+
 async function chat(request, env) {
   let body; try { body = await request.json(); } catch (e) { return err(400, "Bad request"); }
   const mode = body.mode;
@@ -285,8 +291,17 @@ async function admin(request, env, path) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url), path = url.pathname;
-    if (!path.startsWith("/api/")) return env.ASSETS.fetch(request);
+    if (!path.startsWith("/api/")) {
+      const response = await env.ASSETS.fetch(request);
+      const headers = new Headers(response.headers);
+      headers.set("x-content-type-options", "nosniff");
+      headers.set("referrer-policy", "strict-origin-when-cross-origin");
+      headers.set("x-frame-options", "SAMEORIGIN");
+      headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
+      return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+    }
     try {
+      if (!sameOrigin(request)) return err(403, "Cross-origin request blocked");
       if (path === "/api/chat" && request.method === "POST") return await chat(request, env);
       if (path === "/api/content" && request.method === "GET") return await content(env);
       if (path === "/api/admin/login" && request.method === "POST") return await login(request, env);
